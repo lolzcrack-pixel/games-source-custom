@@ -7,4 +7,6 @@ RUN         sed -i 's/\r$//' /wrapper.sh && chmod +x /wrapper.sh
 USER        container
 WORKDIR     /home/container
 
+ENV         RESTART_TIMES=08:00
+
 CMD         ["/wrapper.sh"]
