@@ -184,6 +184,7 @@ mkfifo "$FIFO" || { log "No se pudo crear $FIFO"; exit 1; }
 exec 3<>"$FIFO"
 
 exec 4<&0
+[ "$CONSOLE_PTY" == "1" ] && [ -t 0 ] && stty -echo 2>/dev/null
 forward_stdin <&4 &
 FORWARD_PID=$!
 
