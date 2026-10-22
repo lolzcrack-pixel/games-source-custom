@@ -55,7 +55,7 @@ jobs:
           }
 
           ( sleep 4; echo status; sleep 1; echo crash; sleep 6; echo status2; sleep 1; echo quit; sleep 5 ) \
-            | timeout 60 bash -c "$(declare -f run); run -e RESTART_INTERVAL_HOURS=0" | tr -d "" | tee out1.txt
+            | timeout 60 bash -c "$(declare -f run); run -e RESTART_INTERVAL_HOURS=0" | tr -d "\r" | tee out1.txt
           grep -q "GOT:status$" out1.txt
           grep -q "tty=yes" out1.txt
           grep -q "Reiniciando en" out1.txt
@@ -63,7 +63,7 @@ jobs:
           grep -q "detenido desde el panel" out1.txt
 
           ( sleep 30; echo quit; sleep 5 ) \
-            | timeout 60 bash -c "$(declare -f run); run -e RESTART_INTERVAL_HOURS=0.005 -e RESTART_WARNINGS=5" | tr -d "" | tee out2.txt
+            | timeout 60 bash -c "$(declare -f run); run -e RESTART_INTERVAL_HOURS=0.005 -e RESTART_WARNINGS=5" | tr -d "\r" | tee out2.txt
           grep -q "GOT:say" out2.txt
           grep -q "Reinicio programado completado" out2.txt
           [ "$(grep -c 'FAKE START' out2.txt)" -ge 2 ]
