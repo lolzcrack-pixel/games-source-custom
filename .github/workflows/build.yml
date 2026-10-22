@@ -31,6 +31,45 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          load: true
           pull: true
-          tags: ghcr.io/${{ env.OWNER }}/games:source-custom
+          tags: test-image
+
+      - name: Test
+        run: |
+          mkdir -p t && chmod 777 t
+          cat > t/fake.sh <<'EOF'
+          #!/bin/bash
+          echo "FAKE START tty=$([ -t 0 ] && echo yes || echo no)"
+          while IFS= read -r l; do
+            l=${l%$'\r'}
+            echo "GOT:$l"
+            [ "$l" = "crash" ] && exit 1
+            [ "$l" = "quit" ] && exit 0
+          done
+          EOF
+          chmod +x t/fake.sh
+          run() {
+            docker run -i --rm -v "$PWD/t/fake.sh:/home/container/fake.sh:ro" \
+              -e STARTUP="./fake.sh" -e AUTO_UPDATE=0 -e RESTART_TIMES= -e CRASH_RESTART_DELAY=2 "$@" test-image
+          }
+
+          ( sleep 4; echo status; sleep 1; echo crash; sleep 6; echo status2; sleep 1; echo quit; sleep 5 ) \
+            | timeout 60 bash -c "$(declare -f run); run -e RESTART_INTERVAL_HOURS=0" | tee out1.txt
+          grep -q "GOT:status$" out1.txt
+          grep -q "tty=yes" out1.txt
+          grep -q "Reiniciando en" out1.txt
+          grep -q "GOT:status2" out1.txt
+          grep -q "detenido desde el panel" out1.txt
+
+          ( sleep 30; echo quit; sleep 5 ) \
+            | timeout 60 bash -c "$(declare -f run); run -e RESTART_INTERVAL_HOURS=0.005 -e RESTART_WARNINGS=5" | tee out2.txt
+          grep -q "GOT:say" out2.txt
+          grep -q "Reinicio programado completado" out2.txt
+          [ "$(grep -c 'FAKE START' out2.txt)" -ge 2 ]
+          grep -q "detenido desde el panel" out2.txt
+
+      - name: Push
+        run: |
+          docker tag test-image ghcr.io/${{ env.OWNER }}/games:source-custom
+          docker push ghcr.io/${{ env.OWNER }}/games:source-custom

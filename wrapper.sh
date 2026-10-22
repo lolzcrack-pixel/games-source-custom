@@ -14,6 +14,7 @@ RESTART_STOP_CMD=${RESTART_STOP_CMD:-quit}
 
 STOP_COMMANDS=${STOP_COMMANDS:-quit,exit}
 STOP_TIMEOUT=${STOP_TIMEOUT:-30}
+CONSOLE_PTY=${CONSOLE_PTY:-1}
 
 TZ=${TZ:-UTC}
 export TZ
@@ -61,6 +62,26 @@ send_cmd() {
 
 kill_server() {
     [ -n "$SERVER_PID" ] && kill -"$1" -- -"$SERVER_PID" 2>/dev/null
+}
+
+kill_orphans() {
+    local p
+    for p in /proc/[0-9]*; do
+        p=${p#/proc/}
+        case "$p" in
+            1|"$$"|"$FORWARD_PID") continue ;;
+        esac
+        kill -KILL "$p" 2>/dev/null
+    done
+}
+
+start_server() {
+    if [ "$CONSOLE_PTY" == "1" ]; then
+        setsid script -q -f -e -E never -c /entrypoint.sh /dev/null <&3 &
+    else
+        setsid /entrypoint.sh <&3 &
+    fi
+    SERVER_PID=$!
 }
 
 is_stop_cmd() {
@@ -162,7 +183,8 @@ rm -f "$FIFO" "$USER_STOP_FLAG" "$SCHEDULED_FLAG"
 mkfifo "$FIFO" || { log "No se pudo crear $FIFO"; exit 1; }
 exec 3<>"$FIFO"
 
-forward_stdin &
+exec 4<&0
+forward_stdin <&4 &
 FORWARD_PID=$!
 
 log "Crash restart: $AUTO_RESTART_ON_CRASH | Intervalo: ${RESTART_INTERVAL_HOURS}h | Horas fijas: ${RESTART_TIMES:-ninguna} | TZ: $TZ"
@@ -170,8 +192,7 @@ log "Crash restart: $AUTO_RESTART_ON_CRASH | Intervalo: ${RESTART_INTERVAL_HOURS
 while true; do
     rm -f "$SCHEDULED_FLAG"
 
-    setsid /entrypoint.sh <&3 &
-    SERVER_PID=$!
+    start_server
 
     scheduler &
     SCHEDULER_PID=$!
@@ -184,6 +205,7 @@ while true; do
 
     stop_scheduler
     kill_server KILL
+    kill_orphans
     SERVER_PID=""
 
     if [ -f "$USER_STOP_FLAG" ]; then
